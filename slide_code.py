@@ -1,3 +1,35 @@
+# import pymysql
+#
+# conn = pymysql.connect(
+#     host='127.0.0.1',
+#     user='root',
+#     password='123456',
+#     port=3306,
+#     database='test'
+# )
+#
+# # 创建游标，查询数据以元组形式返回
+# # cursor = conn.cursor()
+#
+# # 创建游标，查询数据以字典形式返回
+# cursor = conn.cursor(pymysql.cursors.DictCursor)
+#
+# sql = 'show databases'
+# try:
+#     cursor.execute(sql)
+#     result = cursor.fetchall()  # 返回所有数据
+#     # result = cursor.fetchone()  # 返回一行数据
+#     # result = cursor.fetchmany(2)  # fetchmany(size) 获取查询结果集中指定数量的记录，size默认为1
+#     print(result)
+#     cursor.execute(sql)
+#     conn.commit()
+# except Exception as e:
+#     conn.rollback()
+#     print(e)
+# finally:
+#     cursor.close()
+#     conn.close()
+
 class Slider:
     def is_pixel_equal(self, img1, img2, x, y):
         """
@@ -39,68 +71,75 @@ import numpy as np
 from PIL import Image
 
 image_path = 'test.png'
-image1_path = 'test1.png'
+gap_path = 'test1.png'
+image_size = (242, 94)
+gap_size = (34, 34)
 
 
 # 通过轮廓相似度匹配
-def contour_match():
-    pass
+def contour_match(image_path, gap_path, image_size, gap_size, is_show_detail=True):
+    image = cv2.resize(cv2.imread(image_path), image_size)
+    gap_image = cv2.resize(cv2.imread(gap_path), gap_size)
+    # 高斯滤波
+    blurred1 = cv2.GaussianBlur(gap_image, (5, 5), 0)
+    # 图像二值化
+    target_canny = cv2.Canny(blurred1, 200, 400)
+    # cv2.imshow("canny", target_canny)
+    target_contours, target_hierarchy = cv2.findContours(target_canny, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    # for i, contour in enumerate(target_contours):
+    #     print(contour.size)
+    #     x, y, w, h = cv2.boundingRect(contour)
+    #     gap_image = cv2.resize(cv2.imread(gap_path), (34, 34))
+    #     cv2.rectangle(gap_image, (x, y), (x + w, y + h), (0, 0, 255), 2)
+    #     cv2.imshow(str(i), gap_image)
+    #     cv2.waitKey(0)
+
+    # 选择缺口轮廓 最大的轮廓
+    target_contours_max = max(target_contours, key=lambda x: x.size)
+
+    # 高斯滤波
+    blurred = cv2.GaussianBlur(image, (5, 5), 0)
+    # 图像二值化
+    canny = cv2.Canny(blurred, 200, 400)
+
+    # 提取边缘轮廓  参数说明 分别为: 二值图像, 只检测最外围轮廓, 仅保存轮廓的拐点信息
+    contours, hierarchy = cv2.findContours(canny, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    target_moments = cv2.moments(target_contours_max)
+    if target_moments['m00'] == 0:
+        target_cx, target_cy = 0, 0
+    else:
+        target_cx, target_cy = target_moments['m10'] / target_moments['m00'], target_moments['m01'] / target_moments['m00']
+
+    count = 0
+    contour_list = []
+    for contour in contours:
+        if is_show_detail:
+            print(f"当前索引:{count}")
+        image = cv2.resize(cv2.imread(image_path), (242, 94))
+        x, y, w, h = cv2.boundingRect(contours[count])
+        cv2.rectangle(image, (x, y), (x + w, y + h), (0, 0, 255), 2)
+        # cv2.imshow(str(count), image)
+        # cv2.waitKey(0)
+        # 3.创建计算距离对象
+        hausdorff_sd = cv2.createHausdorffDistanceExtractor()
+        d1 = hausdorff_sd.computeDistance(target_contours_max, contour)
+        contour_list.append(d1)
+        if is_show_detail:
+            print(f"当前中心距离:{d1}")
+        count += 1
+    index = contour_list.index(min(contour_list))
+    x, y, w, h = cv2.boundingRect(contours[index])
+    print(f"最小轮廓 索引:{index}  x:{x}  y:{y}")
+    return x, y
 
 
-# slider = Slider()
-# image = Image.open(image_path).resize((242, 94))
-# image1 = Image.open(image1_path).resize((34, 34))
-# left = slider.get_gap(image1, image)
-# print(left)
+# contour_match(image_path, gap_path, image_size, gap_size)
+slider = Slider()
+image = Image.open(image_path).resize((242, 94))
+gap_image = Image.open(gap_path).resize((34, 34))
+left = slider.get_gap(gap_image, image)
+print(left)
 
-image = cv2.resize(cv2.imread(image_path), (242, 94))
-image1 = cv2.resize(cv2.imread(image1_path), (34, 34))
-# 高斯滤波
-blurred1 = cv2.GaussianBlur(image1, (5, 5), 0)
-# 图像二值化
-target_canny = cv2.Canny(blurred1, 200, 400)
-# cv2.imshow("canny", target_canny)
-target_contours, target_hierarchy = cv2.findContours(target_canny, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-# for i, contour in enumerate(target_contours):
-#     print(contour.size)
-#     x, y, w, h = cv2.boundingRect(contour)
-#     image1 = cv2.resize(cv2.imread(image1_path), (34, 34))
-#     cv2.rectangle(image1, (x, y), (x + w, y + h), (0, 0, 255), 2)
-#     cv2.imshow(str(i), image1)
-#     cv2.waitKey(0)
-
-
-# 选择缺口轮廓 最大的轮廓
-target_contours_max = max(target_contours, key=lambda x: x.size)
-
-# 高斯滤波
-blurred = cv2.GaussianBlur(image, (5, 5), 0)
-# 图像二值化
-canny = cv2.Canny(blurred, 200, 400)
-
-# 提取边缘轮廓  参数说明 分别为: 二值图像, 只检测最外围轮廓, 仅保存轮廓的拐点信息
-contours, hierarchy = cv2.findContours(canny, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-target_moments = cv2.moments(target_contours_max)
-if target_moments['m00'] == 0:
-    target_cx, target_cy = 0, 0
-else:
-    target_cx, target_cy = target_moments['m10'] / target_moments['m00'], target_moments['m01'] / target_moments['m00']
-
-count = 0
-for contour in contours:
-    print(count)
-    image = cv2.resize(cv2.imread(image_path), (242, 94))
-    x, y, w, h = cv2.boundingRect(contours[count])
-    cv2.rectangle(image, (x, y), (x + w, y + h), (0, 0, 255), 2)
-    cv2.imshow(str(count), image)
-    cv2.waitKey(0)
-    # 3.创建计算距离对象
-    hausdorff_sd = cv2.createHausdorffDistanceExtractor()
-    d1 = hausdorff_sd.computeDistance(target_contours_max, contour)
-    print(d1)
-    count += 1
-x, y, w, h = cv2.boundingRect(contours[7])
-print(x, y)
 # for i, contour in enumerate(contours):  # 所有轮廓
 #     x, y, w, h = cv2.boundingRect(contour)  # 外接矩形
 #     cv2.rectangle(image, (x, y), (x + w, y + h), (0, 0, 255), 2)
